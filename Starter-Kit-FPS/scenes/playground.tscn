@@ -1,0 +1,117 @@
+[gd_scene format=3]
+
+[ext_resource type="Environment" uid="uid://jvmpkdwaeaq" path="res://scenes/main-environment.tres" id="1_env"]
+[ext_resource type="PackedScene" uid="uid://dl2ed4gkybggf" path="res://objects/player.tscn" id="2_player"]
+[ext_resource type="Script" uid="uid://by0qn28x1i1jj" path="res://scripts/hud.gd" id="3_hud"]
+[ext_resource type="FontFile" uid="uid://biqtga8moh7ah" path="res://fonts/lilita_one_regular.ttf" id="4_font"]
+[ext_resource type="Script" path="res://scripts/playground.gd" id="5_playground"]
+[ext_resource type="PackedScene" uid="uid://bvx5cvigosg0s" path="res://objects/platform_large_grass.tscn" id="6_grass"]
+[ext_resource type="PackedScene" uid="uid://r7rt7pth4u7o" path="res://objects/wall_low.tscn" id="7_wall_low"]
+[ext_resource type="PackedScene" path="res://objects/bomber.tscn" id="8_bomber"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_health"]
+font = ExtResource("4_font")
+font_size = 36
+outline_size = 12
+outline_color = Color(0, 0, 0, 0.470588)
+
+[node name="Playground" type="Node3D"]
+script = ExtResource("5_playground")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("1_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.422618, -0.694272, 0.582563, 0, 0.642788, 0.766044, -0.906308, 0.323744, -0.271654, 0, 0, 0)
+shadow_enabled = true
+shadow_opacity = 0.75
+
+[node name="Player" parent="." node_paths=PackedStringArray("crosshair") instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 3)
+crosshair = NodePath("../HUD/Crosshair")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("3_hud")
+win_when_cleared = false
+
+[node name="Crosshair" type="TextureRect" parent="HUD"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+scale = Vector2(0.35, 0.35)
+pivot_offset = Vector2(64, 64)
+
+[node name="Health" type="Label" parent="HUD"]
+offset_left = 48.0
+offset_top = 627.0
+offset_right = 138.0
+offset_bottom = 672.0
+size_flags_horizontal = 0
+size_flags_vertical = 8
+text = "100%"
+label_settings = SubResource("LabelSettings_health")
+vertical_alignment = 2
+
+[node name="Arena" type="Node3D" parent="."]
+
+[node name="Floor_0_0" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -0.5, -5)
+
+[node name="Floor_0_1" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -0.5, 0)
+
+[node name="Floor_0_2" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, -0.5, 5)
+
+[node name="Floor_1_0" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, -5)
+
+[node name="Floor_1_1" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="Floor_1_2" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 5)
+
+[node name="Floor_2_0" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, -0.5, -5)
+
+[node name="Floor_2_1" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, -0.5, 0)
+
+[node name="Floor_2_2" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, -0.5, 5)
+
+[node name="GapPlatform" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, -12)
+
+[node name="RaisedStep" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.5, 0.5, 0)
+
+[node name="HighLedge" parent="Arena" instance=ExtResource("6_grass")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.5, 0)
+
+[node name="Wall" parent="Arena" instance=ExtResource("7_wall_low")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, -3)
+
+[node name="Wall2" parent="Arena" instance=ExtResource("7_wall_low")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -3, 0, -4.5)
+
+[node name="Wall3" parent="Arena" instance=ExtResource("7_wall_low")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 4.5, 0, 3)
+
+[node name="Enemies" type="Node3D" parent="."]
+
+[node name="bomber" parent="Enemies" instance=ExtResource("8_bomber")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -12)
+
+[node name="Spawned" type="Node3D" parent="."]
+
+[connection signal="health_updated" from="Player" to="HUD" method="_on_health_updated"]

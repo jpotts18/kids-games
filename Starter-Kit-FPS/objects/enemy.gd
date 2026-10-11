@@ -137,7 +137,7 @@ func _on_timer_timeout():
 	if raycast.is_colliding():
 		var collider = raycast.get_collider()
 
-		if collider.has_method("damage"):  # Raycast collides with player
+		if collider == player:  # Raycast collides with player (not other enemies)
 			
 			# Play muzzle flash animation(s)
 
