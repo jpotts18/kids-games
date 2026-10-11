@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://c71evdjblk5wp" path="res://objects/wall_high.tscn" id="7_cabne"]
 [ext_resource type="PackedScene" uid="uid://bvx5cvigosg0s" path="res://objects/platform_large_grass.tscn" id="7_wggef"]
 [ext_resource type="PackedScene" uid="uid://d2g78tpqbyf5g" path="res://objects/enemy.tscn" id="8_7ty2f"]
+[ext_resource type="PackedScene" path="res://objects/bomber.tscn" id="9_bomber"]
 
 [node name="Chunk" type="Node3D"]
 
@@ -21,6 +22,12 @@ transform = Transform3D(-0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, -0.707107
 
 [node name="enemy-flying4" parent="Enemies" instance=ExtResource("8_7ty2f")]
 transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 15.5, 4, -7.5)
+
+[node name="bomber" parent="Enemies" instance=ExtResource("9_bomber")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 3.2, -5)
+
+[node name="bomber2" parent="Enemies" instance=ExtResource("9_bomber")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 1.2, 6.5)
 
 [node name="Level" type="Node3D" parent="."]
 

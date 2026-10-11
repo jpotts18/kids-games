@@ -7,6 +7,8 @@ This package includes a basic template for a first person shooter in Godot 4.6. 
 - Character controller
 - Weapons, switching weapons
 - Enemies
+  - Flying drones that hover and shoot
+  - Bombers: walking bomb robots that charge at you, hop across gaps and explode when close (shoot them from a distance!)
 - Sprites and 3D Models _(CC0 licensed)_
 
 ### Screenshot
