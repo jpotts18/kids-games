@@ -10,6 +10,7 @@ model = ExtResource("2_h64nv")
 rotation = Vector3(0, 180, 0)
 muzzle_position = Vector3(0.1, -0.4, 1.5)
 damage = 10.0
+max_distance = 26
 spread = 0.5
 knockback = 2
 min_knockback = Vector2(0.0005, 0.0005)

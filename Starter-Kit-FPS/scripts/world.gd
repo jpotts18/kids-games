@@ -7,6 +7,7 @@ const CHUNK_CENTER := Vector3(3.18, 0, -0.25) # Middle of a chunk's footprint (t
 const HEIGHT_OFFSETS := [-1.0, 0.0, 1.0]
 
 const CENTER_CHUNK_NAME := "Chunk_1_1"
+const SAFE_START_RADIUS := 13.0 # No enemies start this close to the player
 
 # Runs before the chunks' enemies save their home positions in _ready()
 
@@ -23,3 +24,14 @@ func _enter_tree():
 		# Raise or lower slightly
 
 		chunk.position.y += HEIGHT_OFFSETS.pick_random()
+
+# Clears enemies away from the start so nobody attacks the player right away
+# (must be wider than the enemies' notice radius)
+
+func _ready():
+	var player = get_tree().get_first_node_in_group("player")
+	if !player: return
+
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if enemy.global_position.distance_to(player.global_position) < SAFE_START_RADIUS:
+			enemy.free() # Right away, so the HUD never counts them
