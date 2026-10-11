@@ -28,6 +28,16 @@ class_name Vehicle extends Node3D
 @onready var engine_sound: AudioStreamPlayer3D = $Container/EngineSound
 @onready var impact_sound: AudioStreamPlayer3D = $Container/ImpactSound
 
+var controls_enabled := true # Turned off during the countdown and after the race
+
+# Garage upgrades (1.0 / 0.0 = no upgrade)
+
+var speed_multiplier := 1.0
+var acceleration_multiplier := 1.0
+var steering_multiplier := 1.0
+var grip := 0.0 # Removes sideways sliding
+var brake_strength := 0.0 # Extra braking
+
 var input: Vector3
 var normal: Vector3
 
@@ -57,7 +67,7 @@ func _physics_process(delta):
 
 	var steering_grip = clamp(abs(linear_speed), 0.2, 1.0)
 
-	var target_angular = -input.x * steering_grip * 4 * direction
+	var target_angular = -input.x * steering_grip * 4 * steering_multiplier * direction
 	angular_speed = lerp(angular_speed, target_angular, delta * 4)
 
 	vehicle_model.rotate_y(angular_speed * delta)
@@ -83,11 +93,12 @@ func _physics_process(delta):
 
 	if (target_speed < 0 and linear_speed > 0.01):
 		linear_speed = lerp(linear_speed, 0.0, delta * 8)
+		sphere.angular_velocity *= max(0.0, 1.0 - brake_strength * delta) # Upgraded brakes
 	else:
 		if (target_speed < 0):
 			linear_speed = lerp(linear_speed, target_speed / 2, delta * 2)
 		else:
-			linear_speed = lerp(linear_speed, target_speed, delta * 6)
+			linear_speed = lerp(linear_speed, target_speed, delta * 6 * acceleration_multiplier)
 
 	acceleration = lerpf(acceleration, linear_speed + (abs(sphere.angular_velocity.length() * linear_speed) / 100), delta * 1)
 
@@ -112,11 +123,20 @@ func _physics_process(delta):
 
 func handle_input(delta):
 
-	if raycast.is_colliding():
+	if !controls_enabled:
+		input = Vector3.ZERO
+	elif raycast.is_colliding():
 		input.x = Input.get_axis("left", "right")
 		input.z = Input.get_axis("back", "forward")
 
-	sphere.angular_velocity += vehicle_model.get_global_transform().basis.x * (linear_speed * 100) * delta
+	var roll_axis = vehicle_model.get_global_transform().basis.x
+	sphere.angular_velocity += roll_axis * (linear_speed * 100 * speed_multiplier * acceleration_multiplier) * delta
+
+	# Grip: remove some of the rolling that isn't in the direction the vehicle faces (less drifting)
+
+	if grip > 0 and raycast.is_colliding():
+		var forward_roll = roll_axis * sphere.angular_velocity.dot(roll_axis)
+		sphere.angular_velocity = forward_roll + (sphere.angular_velocity - forward_roll) * max(0.0, 1.0 - grip * delta)
 
 func effect_body(delta):
 	
