@@ -4,6 +4,7 @@ extends CharacterBody3D
 @export var movement_speed = 5
 @export_range(0, 100) var number_of_jumps: int = 2
 @export var jump_strength = 8
+@export var trampoline_strength = 14
 
 @export_subgroup("Weapons")
 @export var weapons: Array[Weapon] = []
@@ -161,6 +162,22 @@ func handle_gravity(delta):
 	if gravity > 0 and is_on_floor():
 		jumps_remaining = number_of_jumps
 		gravity = 0
+
+		if is_on_trampoline():
+			action_bounce()
+
+# Trampolines (the orange platforms) bounce the player back up
+
+func is_on_trampoline() -> bool:
+	for i in get_slide_collision_count():
+		var collider = get_slide_collision(i).get_collider()
+		if collider and collider.is_in_group("trampoline"):
+			return true
+	return false
+
+func action_bounce():
+	Audio.play("sounds/jump_a.ogg, sounds/jump_b.ogg, sounds/jump_c.ogg")
+	gravity = - trampoline_strength
 
 # Jumping
 
