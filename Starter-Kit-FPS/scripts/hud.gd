@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+@export var win_when_cleared := true # Turned off in the playground, where clearing all enemies shouldn't end the game
+
 const MAX_HEALTH := 100.0
 
 const BAR_SIZE := Vector2(320, 34)
@@ -49,7 +51,7 @@ func _process(delta):
 	total_enemies = max(total_enemies, enemies_left)
 	enemy_counter.text = "Enemies: %d / %d" % [enemies_left, total_enemies]
 
-	if total_enemies > 0 and enemies_left == 0:
+	if win_when_cleared and total_enemies > 0 and enemies_left == 0:
 		win()
 
 func win():

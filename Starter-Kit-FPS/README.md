@@ -34,6 +34,22 @@ Duplicate one of the existing resources in the 'weapons' folder, adjust the prop
 
 Select the resource of the weapon you'd like to change in the 'weapons' folder, adjust the properties in the inspector.
 
+3. How to test enemies and effects without playing the whole game?
+
+Open `scenes/playground.tscn` and press <kbd>F6</kbd> (Run Current Scene). It's a small test arena with a gap, a raised step and a high ledge. Clearing every enemy there doesn't end the game. Keys:
+
+| Key | Command |
+| --- | --- |
+| <kbd>1</kbd> – <kbd>4</kbd> | Spawn bomber / flying enemy / health pickup / explosion in front of you |
+| <kbd>X</kbd> | Clear enemies |
+| <kbd>G</kbd> | God mode |
+| <kbd>F</kbd> | Freeze enemies |
+| <kbd>T</kbd> | Slow motion |
+| <kbd>R</kbd> | Reset |
+| <kbd>H</kbd> | Hide help |
+
+To make something new spawnable, add it to `SPAWNABLES` in `scripts/playground.gd`.
+
 ### License
 
 MIT License
