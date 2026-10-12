@@ -34,6 +34,13 @@ var container_offset = Vector3(1.2, -1.1, -2.75)
 
 var tween: Tween
 
+var aiming := false # True while looking through a scope
+var default_fov: float
+var scope_overlay: ColorRect
+var reload_bar: ProgressBar
+var message_label: Label
+var message_tween: Tween
+
 signal health_updated
 
 @onready var camera = $Head/Camera
@@ -53,8 +60,15 @@ func _enter_tree():
 func _ready():
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	
+	weapons = weapons.duplicate() # Own copy, so picked-up weapons don't carry over to the next game
 	weapon = weapons[weapon_index] # Weapon must never be nil
 	initiate_change_weapon(weapon_index)
+
+	default_fov = camera.fov
+	build_scope_overlay()
+	build_reload_bar()
+	build_message_label()
+	blaster_cooldown.timeout.connect(_on_reloaded)
 
 func _process(delta):
 	# Handle functions
@@ -93,6 +107,9 @@ func _process(delta):
 		camera.position.y = -0.1
 	
 	previously_floored = is_on_floor()
+
+	update_aiming(delta)
+	update_reload_bar()
 	
 	# Falling/respawning
 	
@@ -104,7 +121,8 @@ func _process(delta):
 func _input(event):
 	if event is InputEventMouseMotion and mouse_captured:
 		input_mouse = event.relative / mouse_sensitivity
-		handle_rotation(event.relative.x, event.relative.y, false)
+		var zoom = camera.fov / default_fov # Turn slower while zoomed in, so aiming is steady
+		handle_rotation(event.relative.x * zoom, event.relative.y * zoom, false)
 
 func handle_controls(delta):
 	# Mouse capture
@@ -121,7 +139,7 @@ func handle_controls(delta):
 	# Handle Controller Rotation
 	var rotation_input := Input.get_vector("camera_right", "camera_left", "camera_down", "camera_up")
 	if rotation_input:
-		handle_rotation(rotation_input.x, rotation_input.y, true, delta)
+		handle_rotation(rotation_input.x * camera.fov / default_fov, rotation_input.y * camera.fov / default_fov, true, delta)
 	
 	# Shooting
 	
@@ -278,6 +296,7 @@ func change_weapon():
 	
 	weapon_model.position = weapon.position
 	weapon_model.rotation_degrees = weapon.rotation
+	weapon_model.scale = weapon.scale
 	
 	# Step 3. Set model to only render on layer 2 (the weapon camera)
 	
@@ -288,6 +307,133 @@ func change_weapon():
 	
 	raycast.target_position = Vector3(0, 0, -1) * weapon.max_distance
 	crosshair.texture = weapon.crosshair
+
+# Aiming: hold the aim button with a scoped weapon to zoom in
+
+func update_aiming(delta):
+	aiming = weapon.can_aim and Input.is_action_pressed("aim") and mouse_captured
+
+	var target_fov = weapon.aim_fov if aiming else default_fov
+	camera.fov = lerp(camera.fov, target_fov, min(delta * 15, 1.0))
+
+	var zoomed_in = aiming and camera.fov < default_fov - 10
+	scope_overlay.visible = zoomed_in
+	container.visible = !zoomed_in # Hide the weapon model while looking through the scope
+	muzzle.visible = !zoomed_in
+	crosshair.visible = !zoomed_in
+
+# The scope: a dark screen with a round window and crosshair lines
+
+func build_scope_overlay():
+	var shader = Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+uniform float radius = 0.42;
+
+void fragment() {
+	vec2 size = 1.0 / SCREEN_PIXEL_SIZE;
+	vec2 p = (UV - 0.5) * size / size.y; // Centered, corrected for screen shape
+	float d = length(p);
+
+	float outside = smoothstep(radius - 0.004, radius, d);
+	float ring = smoothstep(radius - 0.012, radius - 0.008, d);
+	float lines = (abs(p.x) < 0.0015 || abs(p.y) < 0.0015) && d < radius ? 1.0 : 0.0;
+	float gap = d < 0.02 ? 0.0 : 1.0; // Leaves the very center open
+
+	COLOR = vec4(0.0, 0.0, 0.0, max(max(outside, ring * 0.8), lines * gap * 0.85));
+}
+"""
+
+	scope_overlay = ColorRect.new()
+	scope_overlay.material = ShaderMaterial.new()
+	scope_overlay.material.shader = shader
+	scope_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scope_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scope_overlay.visible = false
+	crosshair.get_parent().add_child(scope_overlay)
+	crosshair.get_parent().move_child(scope_overlay, 0) # Behind the rest of the HUD
+
+	var dot = ColorRect.new() # Red dot in the middle of the scope
+	dot.color = Color("ff3b30")
+	dot.set_anchors_preset(Control.PRESET_CENTER)
+	dot.offset_left = -2; dot.offset_right = 2
+	dot.offset_top = -2; dot.offset_bottom = 2
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scope_overlay.add_child(dot)
+
+# Reloading: weapons with a long cooldown show a bar under the crosshair
+
+func build_reload_bar():
+	reload_bar = ProgressBar.new()
+	reload_bar.show_percentage = false
+	reload_bar.set_anchors_preset(Control.PRESET_CENTER)
+	reload_bar.offset_left = -45; reload_bar.offset_right = 45
+	reload_bar.offset_top = 40; reload_bar.offset_bottom = 48 # Just below the crosshair
+	reload_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	reload_bar.max_value = 1.0
+
+	var background = StyleBoxFlat.new()
+	background.bg_color = Color(0, 0, 0, 0.5)
+	background.set_corner_radius_all(4)
+	reload_bar.add_theme_stylebox_override("background", background)
+
+	var fill = StyleBoxFlat.new()
+	fill.bg_color = Color("ffcc00")
+	fill.set_corner_radius_all(4)
+	reload_bar.add_theme_stylebox_override("fill", fill)
+
+	reload_bar.visible = false
+	crosshair.get_parent().add_child(reload_bar)
+
+func update_reload_bar():
+	var reloading = weapon.cooldown >= 0.5 and !blaster_cooldown.is_stopped()
+
+	reload_bar.visible = reloading
+	if reloading:
+		reload_bar.value = 1.0 - blaster_cooldown.time_left / blaster_cooldown.wait_time
+
+func _on_reloaded():
+	if weapon.cooldown >= 0.5:
+		Audio.play("sounds/weapon_change.ogg") # Click! Ready to fire again
+
+# Picking up a new weapon adds it to the loadout and switches to it
+
+func pick_up_weapon(new_weapon: Weapon):
+	if !weapons.has(new_weapon):
+		weapons.append(new_weapon)
+
+	initiate_change_weapon(weapons.find(new_weapon))
+	Audio.play("sounds/weapon_change.ogg")
+
+	var hint = "  Hold right-click to aim!" if new_weapon.can_aim else ""
+	show_message("You got the " + new_weapon.display_name + "!" + hint)
+
+# Big message at the top of the screen that fades away
+
+func build_message_label():
+	message_label = Label.new()
+	message_label.add_theme_font_override("font", preload("res://fonts/lilita_one_regular.ttf"))
+	message_label.add_theme_font_size_override("font_size", 36)
+	message_label.add_theme_color_override("font_color", Color("ffcc00"))
+	message_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	message_label.add_theme_constant_override("outline_size", 12)
+	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	message_label.offset_left = -500; message_label.offset_right = 500
+	message_label.offset_top = 120; message_label.offset_bottom = 170
+	message_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	message_label.modulate.a = 0
+	crosshair.get_parent().add_child(message_label)
+
+func show_message(text: String):
+	message_label.text = text
+	message_label.modulate.a = 1
+
+	if message_tween: message_tween.kill()
+	message_tween = create_tween()
+	message_tween.tween_interval(3.0)
+	message_tween.tween_property(message_label, "modulate:a", 0.0, 1.0)
 
 func damage(amount):
 	health -= amount

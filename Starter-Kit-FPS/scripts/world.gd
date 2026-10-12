@@ -35,3 +35,14 @@ func _ready():
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy.global_position.distance_to(player.global_position) < SAFE_START_RADIUS:
 			enemy.free() # Right away, so the HUD never counts them
+
+	choose_golden_drone(player)
+
+# One random flying drone carries the sniper. Destroy it to get the weapon
+
+func choose_golden_drone(player):
+	var drones = get_tree().get_nodes_in_group("enemies").filter(func(enemy): return enemy.has_method("carry_weapon"))
+	if drones.is_empty(): return
+
+	drones.pick_random().carry_weapon(preload("res://weapons/sniper.tres"))
+	player.show_message.call_deferred("A golden drone has a sniper. Destroy it!") # Once the player's HUD is ready

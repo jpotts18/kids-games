@@ -11,6 +11,7 @@ const SPAWNABLES := [
 	{ "name": "Flying enemy", "scene": "res://objects/enemy.tscn", "distance": 8.0, "height": 2.5 },
 	{ "name": "Health pickup", "script": "res://objects/health_pickup.gd", "distance": 3.0, "height": 1.0 },
 	{ "name": "Explosion", "script": "res://objects/explosion.gd", "distance": 5.0, "height": 1.0 },
+	{ "name": "Sniper pickup", "script": "res://objects/weapon_pickup.gd", "distance": 3.0, "height": 1.0 },
 ]
 
 const SLOW_MOTION_SCALE := 0.25

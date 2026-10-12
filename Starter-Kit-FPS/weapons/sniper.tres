@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="Weapon" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" uid="uid://2jld33y6h5pq" path="res://sprites/crosshair.png" id="1_cross"]
+[ext_resource type="PackedScene" uid="uid://dd3oln1ucgqpd" path="res://models/blaster-repeater.glb" id="2_model"]
+[ext_resource type="Script" uid="uid://dg01pkkc1c5vd" path="res://scripts/weapon.gd" id="3_script"]
+
+[resource]
+script = ExtResource("3_script")
+display_name = "Sniper"
+model = ExtResource("2_model")
+rotation = Vector3(0, 180, 0)
+scale = Vector3(0.8, 0.8, 1.8)
+muzzle_position = Vector3(0.1, -0.4, 2.5)
+cooldown = 1.5
+max_distance = 120
+damage = 100.0
+knockback = 15
+min_knockback = Vector2(0.02, 0.005)
+max_knockback = Vector2(0.03, 0.01)
+sound_shoot = "sounds/blaster.ogg"
+can_aim = true
+aim_fov = 20.0
+crosshair = ExtResource("1_cross")
