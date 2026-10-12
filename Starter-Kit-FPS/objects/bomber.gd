@@ -84,7 +84,7 @@ func _physics_process(delta):
 
 	var distance_to_player = global_position.distance_to(player.global_position)
 
-	if !alerted and distance_to_player < notice_radius:
+	if !alerted and distance_to_player < notice_radius and !player.is_sneaking():
 		notice_player()
 	elif alerted and !fuse_lit and distance_to_player > give_up_radius:
 		alerted = false

@@ -39,6 +39,14 @@ var default_fov: float
 var scope_overlay: ColorRect
 var reload_bar: ProgressBar
 var message_label: Label
+
+var grappling := false # True while the hook is attached and pulling
+var sneak_time := 0.0 # Stays unnoticed this long after letting go of the hook
+
+const SNEAK_AFTER_GRAPPLE := 0.5
+var grapple_point: Vector3
+var rope: Node3D
+var hook: MeshInstance3D
 var message_tween: Tween
 
 signal health_updated
@@ -68,6 +76,7 @@ func _ready():
 	build_scope_overlay()
 	build_reload_bar()
 	build_message_label()
+	build_rope()
 	blaster_cooldown.timeout.connect(_on_reloaded)
 
 func _process(delta):
@@ -81,7 +90,11 @@ func _process(delta):
 	
 	movement_velocity = transform.basis * movement_velocity # Move forward
 	
-	applied_velocity = velocity.lerp(movement_velocity, delta * 10)
+	if grappling:
+		applied_velocity = pull_towards_hook(delta)
+	else:
+		applied_velocity = velocity.lerp(movement_velocity, delta * 10)
+
 	applied_velocity.y = - gravity
 	
 	velocity = applied_velocity
@@ -110,6 +123,9 @@ func _process(delta):
 
 	update_aiming(delta)
 	update_reload_bar()
+	update_rope()
+
+	sneak_time = max(sneak_time - delta, 0.0)
 	
 	# Falling/respawning
 	
@@ -148,7 +164,11 @@ func handle_controls(delta):
 	# Jumping
 	
 	if Input.is_action_just_pressed("jump"):
-		if jumps_remaining:
+		if grappling:
+			release_grapple()
+			gravity = min(gravity, - jump_strength) # Let go with a boost
+			Audio.play("sounds/jump_a.ogg, sounds/jump_b.ogg, sounds/jump_c.ogg")
+		elif jumps_remaining:
 			action_jump()
 		
 	# Weapon switching
@@ -207,6 +227,10 @@ func action_jump():
 # Shooting
 
 func action_shoot():
+	if weapon.grapple:
+		action_grapple()
+		return
+
 	if Input.is_action_pressed("shoot"):
 		if !blaster_cooldown.is_stopped(): return # Cooldown for shooting
 		
@@ -273,6 +297,7 @@ func action_weapon_toggle():
 
 func initiate_change_weapon(index):
 	weapon_index = index
+	release_grapple()
 	
 	tween = get_tree().create_tween()
 	tween.set_ease(Tween.EASE_OUT_IN)
@@ -297,6 +322,13 @@ func change_weapon():
 	weapon_model.position = weapon.position
 	weapon_model.rotation_degrees = weapon.rotation
 	weapon_model.scale = weapon.scale
+
+	if weapon.tint.a > 0:
+		var tint = StandardMaterial3D.new()
+		tint.albedo_color = weapon.tint
+		tint.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		for mesh in weapon_model.find_children("*", "MeshInstance3D"):
+			mesh.material_overlay = tint
 	
 	# Step 3. Set model to only render on layer 2 (the weapon camera)
 	
@@ -307,6 +339,121 @@ func change_weapon():
 	
 	raycast.target_position = Vector3(0, 0, -1) * weapon.max_distance
 	crosshair.texture = weapon.crosshair
+	crosshair.modulate = Color.WHITE
+
+# Grappling hook: hold shoot to fire the hook and get reeled in, let go (or
+# jump) to release. The crosshair turns green when there's something to grab
+
+func action_grapple():
+	var target = find_grapple_target()
+	crosshair.modulate = Color("4cd964") if target != null or grappling else Color.WHITE
+
+	if Input.is_action_just_pressed("shoot") and !grappling:
+		if target == null:
+			Audio.play("sounds/weapon_change.ogg") # Nothing to grab
+			return
+
+		grappling = true
+		grapple_point = target
+		jumps_remaining = number_of_jumps # Jumps refill, so you can chain swings
+
+		Audio.play("sounds/blaster.ogg")
+		container.position.z += 0.25 # Kick of the weapon visual
+
+	elif grappling and !Input.is_action_pressed("shoot"):
+		release_grapple()
+
+# Hooks onto the level only (not enemies or pickups). Returns null when out of range
+
+func find_grapple_target():
+	var from = camera.global_position
+	var to = from - camera.global_basis.z * weapon.max_distance
+
+	var query = PhysicsRayQueryParameters3D.create(from, to)
+	query.exclude = [get_rid()]
+
+	var hit = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit and hit.collider is StaticBody3D and !hit.collider.has_method("damage"):
+		return hit.position
+	return null
+
+func pull_towards_hook(delta) -> Vector3:
+	var to_hook = grapple_point - (global_position + Vector3.UP * 0.5)
+
+	if to_hook.length() < 1.2: # Arrived
+		release_grapple()
+		gravity = min(gravity, - jump_strength * 0.5) # Little hop onto the ledge
+		return velocity
+
+	var pull = to_hook.normalized() * weapon.grapple_pull_speed + movement_velocity * 0.3 # A bit of steering
+	var new_velocity = velocity.lerp(pull, min(delta * 6, 1.0))
+
+	gravity = - new_velocity.y # Gravity is replaced by the pull while hooked
+	return new_velocity
+
+func release_grapple():
+	if !grappling: return
+	grappling = false
+	sneak_time = SNEAK_AFTER_GRAPPLE
+	if is_instance_valid(crosshair): crosshair.modulate = Color.WHITE
+
+# Sleeping enemies don't notice the player zipping past on the hook (but
+# enemies that are already chasing keep chasing, and shooting one still wakes it)
+
+func is_sneaking() -> bool:
+	return grappling or sneak_time > 0
+
+# The rope: a thin cylinder from the gun to the hook
+
+func build_rope():
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color("c8a165")
+
+	rope = Node3D.new()
+	rope.top_level = true
+	add_child(rope)
+
+	var line = MeshInstance3D.new()
+	line.mesh = CylinderMesh.new()
+	line.mesh.top_radius = 0.025
+	line.mesh.bottom_radius = 0.025
+	line.mesh.height = 1.0
+	line.mesh.material = material
+	line.rotation.x = PI / 2 # Lie along the rope's forward axis
+	line.position.z = -0.5
+	line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	rope.add_child(line)
+
+	var hook_material = StandardMaterial3D.new()
+	hook_material.albedo_color = Color("4cd964")
+	hook_material.emission_enabled = true
+	hook_material.emission = Color("4cd964")
+
+	hook = MeshInstance3D.new()
+	hook.mesh = SphereMesh.new()
+	hook.mesh.radius = 0.12
+	hook.mesh.height = 0.24
+	hook.mesh.material = hook_material
+	hook.top_level = true
+	add_child(hook)
+
+	rope.visible = false
+	hook.visible = false
+
+func update_rope():
+	rope.visible = grappling
+	hook.visible = grappling
+	if !grappling: return
+
+	var start = camera.global_transform * Vector3(0.25, -0.25, -0.6) # Near the gun
+	var direction = grapple_point - start
+	var up = Vector3.UP if abs(direction.normalized().y) < 0.99 else Vector3.FORWARD
+
+	var rope_basis = Basis.looking_at(direction, up)
+	rope_basis.z *= direction.length() # Stretch to reach the hook
+	rope.global_transform = Transform3D(rope_basis, start)
+
+	hook.global_position = grapple_point
 
 # Aiming: hold the aim button with a scoped weapon to zoom in
 

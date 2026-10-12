@@ -9,6 +9,7 @@ extends Node3D
 const SPAWNABLES := [
 	{ "name": "Bomber", "scene": "res://objects/bomber.tscn", "distance": 8.0, "height": 1.0 },
 	{ "name": "Flying enemy", "scene": "res://objects/enemy.tscn", "distance": 8.0, "height": 2.5 },
+	{ "name": "Turret", "scene": "res://objects/turret.tscn", "distance": 10.0, "height": 1.0 },
 	{ "name": "Health pickup", "script": "res://objects/health_pickup.gd", "distance": 3.0, "height": 1.0 },
 	{ "name": "Explosion", "script": "res://objects/explosion.gd", "distance": 5.0, "height": 1.0 },
 	{ "name": "Sniper pickup", "script": "res://objects/weapon_pickup.gd", "distance": 3.0, "height": 1.0 },

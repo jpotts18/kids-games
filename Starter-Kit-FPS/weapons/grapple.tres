@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="Weapon" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" uid="uid://ce3lgq7foiusl" path="res://sprites/crosshair-repeater.png" id="1_cross"]
+[ext_resource type="PackedScene" uid="uid://b2p7bbkuxf7m" path="res://models/blaster.glb" id="2_model"]
+[ext_resource type="Script" uid="uid://dg01pkkc1c5vd" path="res://scripts/weapon.gd" id="3_script"]
+
+[resource]
+script = ExtResource("3_script")
+display_name = "Grappling hook"
+model = ExtResource("2_model")
+rotation = Vector3(0, 180, 0)
+scale = Vector3(0.9, 0.9, 0.9)
+tint = Color(0.3, 0.85, 0.4, 0.55)
+muzzle_position = Vector3(0.1, -0.4, 1.5)
+max_distance = 35
+damage = 0.0
+knockback = 0
+sound_shoot = "sounds/blaster.ogg"
+grapple = true
+grapple_pull_speed = 18.0
+crosshair = ExtResource("1_cross")

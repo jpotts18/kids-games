@@ -8,6 +8,7 @@ class_name Weapon
 @export var position: Vector3 # On-screen position
 @export var rotation: Vector3 # On-screen rotation
 @export var scale: Vector3 = Vector3.ONE # On-screen scale (stretch a model to make it look different)
+@export var tint: Color = Color(0, 0, 0, 0) # Colors the model (leave transparent for no tint)
 @export var muzzle_position: Vector3 # On-screen position of muzzle flash
 
 @export_subgroup("Properties")
@@ -23,6 +24,10 @@ class_name Weapon
 
 @export_subgroup("Sounds")
 @export var sound_shoot: String # Sound path
+
+@export_subgroup("Grappling hook")
+@export var grapple: bool = false # Shooting fires a hook that pulls the player instead of doing damage
+@export var grapple_pull_speed: float = 18.0 # How fast the hook reels the player in
 
 @export_subgroup("Aiming")
 @export var can_aim: bool = false # Hold the aim button to look through a scope
