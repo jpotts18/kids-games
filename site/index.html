@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Owen's Games</title>
+  <style>
+    :root { --bg: #ececf5; --card: #fff; --text: #1d1d2b; --muted: #5b5b70; --accent: #4f6bed; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #15151d; --card: #22222e; --text: #ececf5; --muted: #a0a0b8; --accent: #8199ff; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    main { max-width: 960px; margin: 0 auto; padding: 48px 16px; }
+    h1 { font-size: 2.5rem; margin: 0 0 8px; }
+    p.lede { color: var(--muted); margin: 0 0 32px; }
+    .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+    a.game { display: block; background: var(--card); border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit;
+             box-shadow: 0 2px 12px rgb(0 0 0 / .08); transition: transform .15s, box-shadow .15s; }
+    a.game:hover, a.game:focus-visible { transform: translateY(-4px); box-shadow: 0 8px 24px rgb(0 0 0 / .15); }
+    a.game img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+    .info { padding: 16px 20px 20px; }
+    .info h2 { margin: 0 0 6px; font-size: 1.35rem; }
+    .info p { margin: 0 0 12px; color: var(--muted); font-size: .95rem; }
+    .play { color: var(--accent); font-weight: 600; }
+    footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Owen's Games</h1>
+    <p class="lede">Pick a game and play right in your browser. Best on a computer with a keyboard and mouse, or a gamepad.</p>
+    <div class="games">
+      <a class="game" href="racing/">
+        <img src="racing.jpg" alt="Racing gameplay">
+        <div class="info">
+          <h2>Racing</h2>
+          <p>Race AI opponents, bump them off the track, and hit the pit stop when you take damage. Drive with WASD or the arrow keys.</p>
+          <span class="play">Play &rarr;</span>
+        </div>
+      </a>
+      <a class="game" href="fps/">
+        <img src="fps.jpg" alt="FPS gameplay">
+        <div class="info">
+          <h2>FPS</h2>
+          <p>Run, jump, and blast enemies. WASD to move, mouse to aim, click to shoot, E to switch weapons.</p>
+          <span class="play">Play &rarr;</span>
+        </div>
+      </a>
+    </div>
+    <footer>Built with Godot. Games may take a few seconds to load.</footer>
+  </main>
+</body>
+</html>

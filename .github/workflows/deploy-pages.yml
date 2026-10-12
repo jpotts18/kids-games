@@ -1,0 +1,75 @@
+name: Deploy games to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.6.3
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-web
+
+      - name: Install Godot and web export templates
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot && cd ~/godot
+          curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && rm godot.zip
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
+          curl -fsSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q templates.tpz 'templates/web*' && rm templates.tpz
+          dest=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p "$dest" && mv templates/* "$dest/"
+
+      - name: Export games
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp -r site/. _site/
+          for game in fps:Starter-Kit-FPS racing:Starter-Kit-Racing; do
+            slug="${game%%:*}"; dir="${game#*:}"
+            mkdir -p "_site/$slug"
+            (cd "$dir" && ~/godot/godot --headless --import && \
+              ~/godot/godot --headless --export-release "Web" "$GITHUB_WORKSPACE/_site/$slug/index.html")
+            test -f "_site/$slug/index.wasm"
+            # Add a "back to all games" link on top of the game canvas.
+            perl -0pi -e 's|<body>|<body>\n<a href="../" style="position:fixed;top:8px;left:8px;z-index:10;padding:6px 12px;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font:14px system-ui,sans-serif;text-decoration:none">&larr; All games</a>|' "_site/$slug/index.html"
+          done
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
