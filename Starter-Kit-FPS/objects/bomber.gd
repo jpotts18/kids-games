@@ -2,6 +2,7 @@ extends CharacterBody3D
 
 # Bomber: a little walking bomb robot. Wanders around its platform, charges at
 # the player when it spots them, lights its fuse when close and explodes.
+# It never leaves the platform it starts on.
 # Shoot it from a distance before it gets to you!
 
 @export var player: Node3D
@@ -18,13 +19,10 @@ extends CharacterBody3D
 @export var blast_radius := 3.5 # Player takes damage inside this radius
 @export var blast_damage := 30 # Damage at the center of the blast (less further out)
 
-@export var max_drop := 2.5 # Won't walk off ledges higher than this
-@export var gap_jump_distance := 2.5 # Hops across gaps up to this wide while charging
 
 @export_range(0, 1) var health_drop_chance := 0.5 # Chance to drop a health pickup when destroyed
 
 const GRAVITY := 20.0
-const JUMP_STRENGTH := 6.0
 
 const BODY_COLOR := Color("3a3f4b")
 const EYE_COLOR := Color("ff3b30")
@@ -39,6 +37,7 @@ var beep_timer := 0.0
 var time := 0.0
 
 var home_position: Vector3
+var home_platform: Object # The platform the bomber landed on; it stays on this one
 var wander_target: Vector3
 var wander_wait := 0.0
 
@@ -75,6 +74,8 @@ func _physics_process(delta):
 
 	if !is_on_floor():
 		velocity.y -= GRAVITY * delta
+	elif !home_platform:
+		home_platform = platform_below(global_position)
 
 	if global_position.y < -30: # Fell out of the world
 		destroyed = true
@@ -115,11 +116,8 @@ func walk_towards(target: Vector3, speed: float):
 	direction = direction.normalized()
 
 	if !has_ground_ahead(direction, 0.7):
-		if alerted and is_on_floor() and has_ground_ahead(direction, gap_jump_distance):
-			velocity.y = JUMP_STRENGTH # Hop across the gap
-		else:
-			stop_walking(speed) # Don't walk off the edge
-			return
+		stop_walking(speed) # Don't walk off the edge of the home platform
+		return
 
 	velocity.x = direction.x * speed
 	velocity.z = direction.z * speed
@@ -144,16 +142,21 @@ func wander(delta):
 
 	walk_towards(wander_target, wander_speed)
 
-# Checks for ground some distance ahead, so the bomber doesn't walk off into the void
+# Checks that the home platform continues some distance ahead, so the bomber
+# never walks (or hops) off it. Before it has landed anywhere, anything goes
 
 func has_ground_ahead(direction: Vector3, distance: float) -> bool:
-	if !is_on_floor(): return true
+	if !home_platform: return true
 
-	var from = global_position + direction * distance + Vector3.UP * 0.5
-	var query = PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * (max_drop + 0.5))
+	return platform_below(global_position + direction * distance) == home_platform
+
+func platform_below(point: Vector3) -> Object:
+	var from = point + Vector3.UP * 0.5
+	var query = PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 3.0)
 	query.exclude = [get_rid()]
 
-	return !get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+	var hit = get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.collider if hit else null
 
 # Spotting the player, with a "!" above the head
 
