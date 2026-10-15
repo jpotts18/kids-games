@@ -16,6 +16,17 @@ const PAR_TIME := 600.0 # Winning faster than this (in seconds) earns a time bon
 const TIME_BONUS_PER_SECOND := 10 # Bonus points for every second under par
 const SAVE_PATH := "user://fps_best.cfg"
 
+const CONTROLS := [ # Shown next to the pause and win menus
+	["Move", "W A S D / Arrows"],
+	["Look", "Mouse"],
+	["Jump", "Space"],
+	["Shoot", "Left click"],
+	["Grapple", "Hold left click"],
+	["Zoom (sniper)", "Right click"],
+	["Switch weapon", "E"],
+	["Pause", "Esc / P"],
+]
+
 var pause_menu: Control
 var win_menu: Control
 var win_score_label: Label
@@ -341,7 +352,7 @@ func set_paused(paused: bool):
 func build_pause_menu():
 	var font = preload("res://fonts/lilita_one_regular.ttf")
 	var column = build_menu("PAUSED")
-	pause_menu = column.get_parent().get_parent()
+	pause_menu = menu_of(column)
 
 	column.add_child(make_button("Resume", font, func(): set_paused(false)))
 	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
@@ -349,7 +360,7 @@ func build_pause_menu():
 func build_win_menu():
 	var font = preload("res://fonts/lilita_one_regular.ttf")
 	var column = build_menu("YOU WIN!")
-	win_menu = column.get_parent().get_parent()
+	win_menu = menu_of(column)
 
 	win_score_label = make_menu_label(font, 36)
 	column.add_child(win_score_label)
@@ -390,9 +401,18 @@ func build_menu(title_text: String) -> VBoxContainer:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu.add_child(center)
 
+	# Menu on the left, controls on the right
+
+	var row = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 64)
+	center.add_child(row)
+
 	var column = VBoxContainer.new()
 	column.add_theme_constant_override("separation", 16)
-	center.add_child(column)
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_child(column)
+
+	row.add_child(build_controls(font))
 
 	var title = Label.new()
 	title.text = title_text
@@ -402,6 +422,47 @@ func build_menu(title_text: String) -> VBoxContainer:
 	column.add_child(title)
 
 	return column
+
+func menu_of(column: VBoxContainer) -> Control:
+	return column.get_parent().get_parent().get_parent() # Column -> row -> center -> menu
+
+# Panel listing what every key and button does
+
+func build_controls(font: Font) -> Control:
+	var panel = PanelContainer.new()
+	var box = make_box(Color(0, 0, 0, 0.45))
+	box.set_content_margin_all(24)
+	panel.add_theme_stylebox_override("panel", box)
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	var column = VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	panel.add_child(column)
+
+	var title = make_menu_label(font, 36)
+	title.text = "CONTROLS"
+	column.add_child(title)
+
+	var grid = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 32)
+	grid.add_theme_constant_override("v_separation", 6)
+	column.add_child(grid)
+
+	for control in CONTROLS:
+		var action = make_menu_label(font, 24)
+		action.text = control[0]
+		action.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		action.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+		grid.add_child(action)
+
+		var key = make_menu_label(font, 24)
+		key.text = control[1]
+		key.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		key.add_theme_color_override("font_color", Color("ffcc00"))
+		grid.add_child(key)
+
+	return panel
 
 func make_button(text: String, font: Font, on_pressed: Callable) -> Button:
 	var button = Button.new()
