@@ -191,12 +191,26 @@ func die():
 	game_over = true
 	get_tree().paused = true
 
+	# Your score still counts for the best score (but not best time, which needs a win)
+
 	var save = ConfigFile.new()
 	save.load(SAVE_PATH)
 	var best_score = save.get_value(save_section(), "score", 0)
+	var new_best_score = score > best_score and Difficulty.chosen() # Not in the playground
+
+	if new_best_score:
+		save.set_value(save_section(), "score", score)
+		save.save(SAVE_PATH)
 
 	death_score_label.text = "Score: %d   Time: %s" % [score, format_time(elapsed_time)]
-	death_best_label.text = "Best score: %d" % best_score if best_score > 0 else "Clear every enemy to set a best score!"
+
+	if new_best_score:
+		death_best_label.text = "NEW BEST SCORE!"
+		death_best_label.add_theme_color_override("font_color", Color("ffcc00"))
+	elif best_score > 0:
+		death_best_label.text = "Best score: %d" % best_score
+	else:
+		death_best_label.text = "Destroy enemies to set a best score!"
 
 	death_menu.visible = true
 	$Crosshair.visible = false
