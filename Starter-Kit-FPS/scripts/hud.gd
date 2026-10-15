@@ -1,6 +1,8 @@
 extends CanvasLayer
 
 @export var win_when_cleared := true # Turned off in the playground, where clearing all enemies shouldn't end the game
+@export var ask_difficulty := true # Shows the easy/hard start screen (off in the playground)
+@export var tutorial := false # On the tutorial map: shows the tutorial instead of enemies, timer and score
 
 const MAX_HEALTH := 100.0
 
@@ -10,15 +12,47 @@ const COLOR_HEALTHY := Color("4cd964")
 const COLOR_HURT := Color("ffcc00")
 const COLOR_DANGER := Color("ff3b30")
 
+const COMBO_WINDOW := 3.0 # Seconds to get the next kill and keep the combo going
+const MAX_COMBO := 5 # Highest score multiplier
+const PAR_TIME := 600.0 # Winning faster than this (in seconds) earns a time bonus
+const TIME_BONUS_PER_SECOND := 10 # Bonus points for every second under par
+const SAVE_PATH := "user://fps_best.cfg"
+
+const CONTROLS := [ # Shown next to the pause and win menus
+	["Move", "W A S D / Arrows"],
+	["Look", "Mouse"],
+	["Jump", "Space"],
+	["Shoot", "Left click"],
+	["Grapple", "Hold left click"],
+	["Zoom (sniper)", "Right click"],
+	["Switch weapon", "E"],
+	["Pause", "Esc / P"],
+]
+
 var pause_menu: Control
 var win_menu: Control
+var death_menu: Control
+var start_menu: Control
+var death_score_label: Label
+var death_best_label: Label
+var win_score_label: Label
 var win_time_label: Label
+var win_total_label: Label
+var win_best_label: Label
 
+var goal_display: Control # Enemy counter, timer and score
 var enemy_counter: Label
 var timer_label: Label
 var total_enemies := 0
 var elapsed_time := 0.0
-var game_won := false
+var game_over := false # Won or died; stops the timer, score and pausing
+
+var score_label: Label
+var combo_label: Label
+var score := 0
+var combo := 0 # Kills in a row, each within COMBO_WINDOW of the last
+var combo_timer := 0.0
+var score_tween: Tween
 
 var health_fill: ProgressBar # Current health
 var health_trail: ProgressBar # Lags behind to show recent damage
@@ -31,18 +65,41 @@ var flash_tween: Tween
 
 func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS # Keep running while the game is paused
+	add_to_group("hud") # Enemies call add_score() when they're destroyed
 	build_health_bar()
 	build_goal_display()
 	build_pause_menu()
 	build_win_menu()
+	build_death_menu()
+	build_start_menu()
+
+	if ask_difficulty and !preload("res://scripts/tutorial.gd").seen():
+		get_tree().paused = true # Nothing in this level runs while switching
+		show_tutorial.call_deferred() # First time on this computer
+	elif ask_difficulty and !Difficulty.chosen():
+		show_start_menu()
+
+	if tutorial:
+		get_tree().paused = false
+		goal_display.visible = false
+		var panel = preload("res://scripts/tutorial.gd").new()
+		add_child(panel)
+		move_child(panel, 1) # Behind the menus (just above the damage flash)
 
 # Enemy counter, timer and winning
 
 func _process(delta):
-	if get_tree().paused or game_won: return
+	if get_tree().paused or game_over: return
 
 	elapsed_time += delta
 	timer_label.text = format_time(elapsed_time)
+	if Difficulty.chosen(): timer_label.text += "  ·  " + Difficulty.display_name()
+
+	if combo_timer > 0:
+		combo_timer -= delta
+		if combo_timer <= 0:
+			combo = 0
+			combo_label.visible = false
 
 	var enemies_left = 0
 	for enemy in get_tree().get_nodes_in_group("enemies"):
@@ -55,12 +112,147 @@ func _process(delta):
 		win()
 
 func win():
-	game_won = true
+	game_over = true
 	get_tree().paused = true
-	win_time_label.text = "Time: " + format_time(elapsed_time)
+
+	var time_bonus = int(max(0, PAR_TIME - elapsed_time)) * TIME_BONUS_PER_SECOND
+	var total = score + time_bonus
+
+	# Compare with the best game so far, and save if this one beat it
+
+	var save = ConfigFile.new()
+	save.load(SAVE_PATH) # Fine if it doesn't exist yet
+	var best_score = save.get_value(save_section(), "score", 0)
+	var best_time = save.get_value(save_section(), "time", INF)
+	var new_best_score = total > best_score
+	var new_best_time = elapsed_time < best_time
+
+	if new_best_score: save.set_value(save_section(), "score", total)
+	if new_best_time: save.set_value(save_section(), "time", elapsed_time)
+	if new_best_score or new_best_time: save.save(SAVE_PATH)
+
+	win_score_label.text = "Score: %d" % score
+	win_time_label.text = "Time: %s   (bonus +%d)" % [format_time(elapsed_time), time_bonus]
+	win_total_label.text = "Total: %d" % total
+
+	if new_best_score:
+		win_best_label.text = "NEW BEST SCORE!"
+		win_best_label.add_theme_color_override("font_color", Color("ffcc00"))
+	else:
+		win_best_label.text = "Best: %d   Best time: %s" % [best_score, format_time(min(best_time, elapsed_time))]
+
+	if new_best_time and !new_best_score:
+		win_best_label.text = "NEW BEST TIME!   Best score: %d" % best_score
+
 	win_menu.visible = true
 	$Crosshair.visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+# Called by enemies when the player destroys them. Quick kills in a row
+# multiply the points (x2, x3, ... up to MAX_COMBO)
+
+func add_score(points: int, world_position: Vector3):
+	if game_over: return
+
+	combo = combo + 1 if combo_timer > 0 else 1
+	combo_timer = COMBO_WINDOW
+
+	var multiplier = min(combo, MAX_COMBO)
+	var gained = points * multiplier
+	score += gained
+	score_label.text = "Score: %d" % score
+
+	if multiplier > 1:
+		combo_label.text = "Combo x%d!" % multiplier
+		combo_label.visible = true
+
+	# Score bumps up in size for a moment
+
+	score_label.pivot_offset = score_label.size * Vector2(1, 0.5)
+	if score_tween: score_tween.kill()
+	score_tween = create_tween()
+	score_tween.tween_property(score_label, "scale", Vector2.ONE * 1.25, 0.06)
+	score_tween.tween_property(score_label, "scale", Vector2.ONE, 0.2)
+
+	show_floating_points(gained, multiplier, world_position)
+
+# "+100" that rises and fades where the enemy was destroyed
+
+func show_floating_points(gained: int, multiplier: int, world_position: Vector3):
+	var label = Label3D.new()
+	label.text = "+%d" % gained
+	label.font = preload("res://fonts/lilita_one_regular.ttf")
+	label.font_size = 96 + 16 * (multiplier - 1) # Bigger for bigger combos
+	label.outline_size = 24
+	label.modulate = Color("ffcc00") if multiplier > 1 else Color.WHITE
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	get_tree().current_scene.add_child(label)
+	label.global_position = world_position + Vector3.UP * 0.5
+
+	var tween = label.create_tween().set_parallel()
+	tween.tween_property(label, "global_position:y", label.global_position.y + 1.5, 1.0).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(0.6)
+	tween.chain().tween_callback(label.queue_free)
+
+# Called by the player when out of health
+
+func die():
+	if game_over: return
+
+	game_over = true
+	get_tree().paused = true
+
+	# Your score still counts for the best score (but not best time, which needs a win)
+
+	var save = ConfigFile.new()
+	save.load(SAVE_PATH)
+	var best_score = save.get_value(save_section(), "score", 0)
+	var new_best_score = score > best_score and Difficulty.chosen() # Not in the playground
+
+	if new_best_score:
+		save.set_value(save_section(), "score", score)
+		save.save(SAVE_PATH)
+
+	death_score_label.text = "Score: %d   Time: %s" % [score, format_time(elapsed_time)]
+
+	if new_best_score:
+		death_best_label.text = "NEW BEST SCORE!"
+		death_best_label.add_theme_color_override("font_color", Color("ffcc00"))
+	elif best_score > 0:
+		death_best_label.text = "Best score: %d" % best_score
+	else:
+		death_best_label.text = "Destroy enemies to set a best score!"
+
+	death_menu.visible = true
+	$Crosshair.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+# Best scores are kept separately for easy and hard
+
+func save_section() -> String:
+	return Difficulty.level if Difficulty.chosen() else "best"
+
+# Start screen: pick easy or hard before playing
+
+func show_start_menu():
+	game_over = true # Nothing counts until a level is picked
+	get_tree().paused = true
+	start_menu.visible = true
+	$Crosshair.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func show_tutorial():
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	get_tree().change_scene_to_file("res://scenes/tutorial.tscn") # Unpauses when it's ready
+
+func choose_level(level: String):
+	Difficulty.level = level
+	play_again() # Reloads the world with the chosen level
+
+func change_level():
+	Difficulty.level = "" # Back to the start screen
+	play_again()
 
 func format_time(seconds: float) -> String:
 	return "%d:%02d" % [int(seconds) / 60, int(seconds) % 60]
@@ -69,6 +261,7 @@ func build_goal_display():
 	var font = preload("res://fonts/lilita_one_regular.ttf")
 
 	var column = VBoxContainer.new()
+	goal_display = column
 	column.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	column.offset_left = -360
 	column.offset_right = -48
@@ -82,6 +275,15 @@ func build_goal_display():
 	timer_label = make_hud_label(font, 26)
 	timer_label.text = "0:00"
 	column.add_child(timer_label)
+
+	score_label = make_hud_label(font, 34)
+	score_label.text = "Score: 0"
+	column.add_child(score_label)
+
+	combo_label = make_hud_label(font, 28)
+	combo_label.add_theme_color_override("font_color", Color("ffcc00"))
+	combo_label.visible = false
+	column.add_child(combo_label)
 
 func make_hud_label(font: Font, size: int) -> Label:
 	var label = Label.new()
@@ -212,7 +414,7 @@ func make_box(color: Color, border_color := Color.TRANSPARENT) -> StyleBoxFlat:
 # Pausing (Escape or P)
 
 func _unhandled_input(event):
-	if game_won: return
+	if game_over: return
 
 	if event.is_action_pressed("mouse_capture_exit") or (event is InputEventKey and event.pressed and !event.echo and event.physical_keycode == KEY_P):
 		set_paused(!get_tree().paused)
@@ -233,23 +435,80 @@ func set_paused(paused: bool):
 func build_pause_menu():
 	var font = preload("res://fonts/lilita_one_regular.ttf")
 	var column = build_menu("PAUSED")
-	pause_menu = column.get_parent().get_parent()
+	pause_menu = menu_of(column)
 
 	column.add_child(make_button("Resume", font, func(): set_paused(false)))
+	column.add_child(make_button("Change level", font, change_level))
 	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
 
 func build_win_menu():
 	var font = preload("res://fonts/lilita_one_regular.ttf")
 	var column = build_menu("YOU WIN!")
-	win_menu = column.get_parent().get_parent()
+	win_menu = menu_of(column)
 
-	win_time_label = Label.new()
-	win_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	win_time_label.add_theme_font_override("font", font)
-	win_time_label.add_theme_font_size_override("font_size", 36)
+	win_score_label = make_menu_label(font, 36)
+	column.add_child(win_score_label)
+	win_time_label = make_menu_label(font, 36)
 	column.add_child(win_time_label)
+	win_total_label = make_menu_label(font, 48)
+	column.add_child(win_total_label)
+	win_best_label = make_menu_label(font, 30)
+	column.add_child(win_best_label)
 
 	column.add_child(make_button("Play again", font, play_again))
+	column.add_child(make_button("Change level", font, change_level))
+	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
+
+func make_menu_label(font: Font, size: int) -> Label:
+	var label = Label.new()
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", font)
+	label.add_theme_font_size_override("font_size", size)
+	return label
+
+func build_death_menu():
+	var font = preload("res://fonts/lilita_one_regular.ttf")
+	var column = build_menu("YOU DIED")
+	death_menu = menu_of(column)
+	column.get_child(0).add_theme_color_override("font_color", COLOR_DANGER) # Red title
+
+	death_score_label = make_menu_label(font, 36)
+	column.add_child(death_score_label)
+	death_best_label = make_menu_label(font, 30)
+	column.add_child(death_best_label)
+
+	column.add_child(make_button("Play again", font, play_again))
+	column.add_child(make_button("Change level", font, change_level))
+	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
+
+func build_start_menu():
+	var font = preload("res://fonts/lilita_one_regular.ttf")
+	var column = build_menu("CHOOSE A LEVEL")
+	start_menu = menu_of(column)
+
+	var save = ConfigFile.new()
+	save.load(SAVE_PATH)
+
+	var levels = [
+		[Difficulty.EASY, "Fewer enemies, and they hit softer"],
+		[Difficulty.HARD, "Every enemy, and they hit harder"],
+	]
+
+	for level in levels:
+		var group = VBoxContainer.new() # Keeps the description close to its button
+		group.add_theme_constant_override("separation", 4)
+		column.add_child(group)
+
+		group.add_child(make_button(level[0].capitalize(), font, choose_level.bind(level[0])))
+
+		var about = make_menu_label(font, 22)
+		about.text = level[1]
+		var best = save.get_value(level[0], "score", 0)
+		if best > 0: about.text += "\nBest: %d" % best
+		about.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
+		group.add_child(about)
+
+	column.add_child(make_button("Tutorial", font, show_tutorial))
 	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
 
 func play_again():
@@ -272,9 +531,18 @@ func build_menu(title_text: String) -> VBoxContainer:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	menu.add_child(center)
 
+	# Menu on the left, controls on the right
+
+	var row = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 64)
+	center.add_child(row)
+
 	var column = VBoxContainer.new()
 	column.add_theme_constant_override("separation", 16)
-	center.add_child(column)
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_child(column)
+
+	row.add_child(build_controls(font))
 
 	var title = Label.new()
 	title.text = title_text
@@ -284,6 +552,47 @@ func build_menu(title_text: String) -> VBoxContainer:
 	column.add_child(title)
 
 	return column
+
+func menu_of(column: VBoxContainer) -> Control:
+	return column.get_parent().get_parent().get_parent() # Column -> row -> center -> menu
+
+# Panel listing what every key and button does
+
+func build_controls(font: Font) -> Control:
+	var panel = PanelContainer.new()
+	var box = make_box(Color(0, 0, 0, 0.45))
+	box.set_content_margin_all(24)
+	panel.add_theme_stylebox_override("panel", box)
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	var column = VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	panel.add_child(column)
+
+	var title = make_menu_label(font, 36)
+	title.text = "CONTROLS"
+	column.add_child(title)
+
+	var grid = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 32)
+	grid.add_theme_constant_override("v_separation", 6)
+	column.add_child(grid)
+
+	for control in CONTROLS:
+		var action = make_menu_label(font, 24)
+		action.text = control[0]
+		action.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		action.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+		grid.add_child(action)
+
+		var key = make_menu_label(font, 24)
+		key.text = control[1]
+		key.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		key.add_theme_color_override("font_color", Color("ffcc00"))
+		grid.add_child(key)
+
+	return panel
 
 func make_button(text: String, font: Font, on_pressed: Callable) -> Button:
 	var button = Button.new()

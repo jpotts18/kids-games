@@ -583,11 +583,11 @@ func show_message(text: String):
 	message_tween.tween_property(message_label, "modulate:a", 0.0, 1.0)
 
 func damage(amount):
-	health -= amount
+	health -= int(round(amount * Difficulty.damage_multiplier())) # Softer on easy, harder on hard
 	health_updated.emit(health) # Update health on HUD
 	
-	if health < 0:
-		get_tree().reload_current_scene() # Reset when out of health
+	if health <= 0:
+		get_tree().call_group("hud", "die") # Shows the "You died" screen
 
 func heal(amount):
 	health = min(health + amount, max_health)

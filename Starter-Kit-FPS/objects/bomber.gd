@@ -21,6 +21,7 @@ extends CharacterBody3D
 
 
 @export_range(0, 1) var health_drop_chance := 0.5 # Chance to drop a health pickup when destroyed
+@export var points := 150 # Score for destroying it
 
 const GRAVITY := 20.0
 
@@ -199,7 +200,7 @@ func update_fuse(delta):
 		beep_timer = lerp(0.35, 0.1, progress)
 
 	if fuse_timer <= 0:
-		destroy()
+		destroy(false) # Blew itself up, so no points
 
 # Take damage from player
 
@@ -226,10 +227,13 @@ func end_hit_flash():
 
 # Explode! Hurts the player if they're too close
 
-func destroy():
+func destroy(shot_by_player := true):
 	if destroyed: return
 
 	destroyed = true
+
+	if shot_by_player:
+		get_tree().call_group("hud", "add_score", points, global_position + Vector3.UP * 0.5)
 
 	Audio.play("sounds/enemy_destroy.ogg")
 

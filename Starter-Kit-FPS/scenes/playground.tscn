@@ -33,6 +33,7 @@ crosshair = NodePath("../HUD/Crosshair")
 [node name="HUD" type="CanvasLayer" parent="."]
 script = ExtResource("3_hud")
 win_when_cleared = false
+ask_difficulty = false
 
 [node name="Crosshair" type="TextureRect" parent="HUD"]
 anchors_preset = 8

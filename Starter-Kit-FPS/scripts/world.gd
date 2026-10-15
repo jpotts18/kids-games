@@ -36,7 +36,18 @@ func _ready():
 		if enemy.global_position.distance_to(player.global_position) < SAFE_START_RADIUS:
 			enemy.free() # Right away, so the HUD never counts them
 
+	thin_out_enemies()
 	choose_golden_drone(player)
+
+# Easy keeps only some of the enemies (picked at random each game)
+
+func thin_out_enemies():
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	enemies.shuffle()
+
+	var keep = int(round(enemies.size() * Difficulty.enemy_share()))
+	for enemy in enemies.slice(keep):
+		enemy.free()
 
 # One random flying drone carries the sniper. Destroy it to get the weapon
 
@@ -45,4 +56,5 @@ func choose_golden_drone(player):
 	if drones.is_empty(): return
 
 	drones.pick_random().carry_weapon(preload("res://weapons/sniper.tres"))
-	player.show_message.call_deferred("A golden drone has a sniper. Destroy it!") # Once the player's HUD is ready
+	if Difficulty.chosen(): # Not behind the start screen
+		player.show_message.call_deferred("A golden drone has a sniper. Destroy it!") # Once the player's HUD is ready
