@@ -1,6 +1,7 @@
 extends CanvasLayer
 
 @export var win_when_cleared := true # Turned off in the playground, where clearing all enemies shouldn't end the game
+@export var ask_difficulty := true # Shows the easy/hard start screen (off in the playground)
 
 const MAX_HEALTH := 100.0
 
@@ -30,6 +31,7 @@ const CONTROLS := [ # Shown next to the pause and win menus
 var pause_menu: Control
 var win_menu: Control
 var death_menu: Control
+var start_menu: Control
 var death_score_label: Label
 var death_best_label: Label
 var win_score_label: Label
@@ -67,6 +69,10 @@ func _ready():
 	build_pause_menu()
 	build_win_menu()
 	build_death_menu()
+	build_start_menu()
+
+	if ask_difficulty and !Difficulty.chosen():
+		show_start_menu()
 
 # Enemy counter, timer and winning
 
@@ -75,6 +81,7 @@ func _process(delta):
 
 	elapsed_time += delta
 	timer_label.text = format_time(elapsed_time)
+	if Difficulty.chosen(): timer_label.text += "  ·  " + Difficulty.display_name()
 
 	if combo_timer > 0:
 		combo_timer -= delta
@@ -103,13 +110,13 @@ func win():
 
 	var save = ConfigFile.new()
 	save.load(SAVE_PATH) # Fine if it doesn't exist yet
-	var best_score = save.get_value("best", "score", 0)
-	var best_time = save.get_value("best", "time", INF)
+	var best_score = save.get_value(save_section(), "score", 0)
+	var best_time = save.get_value(save_section(), "time", INF)
 	var new_best_score = total > best_score
 	var new_best_time = elapsed_time < best_time
 
-	if new_best_score: save.set_value("best", "score", total)
-	if new_best_time: save.set_value("best", "time", elapsed_time)
+	if new_best_score: save.set_value(save_section(), "score", total)
+	if new_best_time: save.set_value(save_section(), "time", elapsed_time)
 	if new_best_score or new_best_time: save.save(SAVE_PATH)
 
 	win_score_label.text = "Score: %d" % score
@@ -186,7 +193,7 @@ func die():
 
 	var save = ConfigFile.new()
 	save.load(SAVE_PATH)
-	var best_score = save.get_value("best", "score", 0)
+	var best_score = save.get_value(save_section(), "score", 0)
 
 	death_score_label.text = "Score: %d   Time: %s" % [score, format_time(elapsed_time)]
 	death_best_label.text = "Best score: %d" % best_score if best_score > 0 else "Clear every enemy to set a best score!"
@@ -194,6 +201,28 @@ func die():
 	death_menu.visible = true
 	$Crosshair.visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+# Best scores are kept separately for easy and hard
+
+func save_section() -> String:
+	return Difficulty.level if Difficulty.chosen() else "best"
+
+# Start screen: pick easy or hard before playing
+
+func show_start_menu():
+	game_over = true # Nothing counts until a level is picked
+	get_tree().paused = true
+	start_menu.visible = true
+	$Crosshair.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func choose_level(level: String):
+	Difficulty.level = level
+	play_again() # Reloads the world with the chosen level
+
+func change_level():
+	Difficulty.level = "" # Back to the start screen
+	play_again()
 
 func format_time(seconds: float) -> String:
 	return "%d:%02d" % [int(seconds) / 60, int(seconds) % 60]
@@ -395,6 +424,7 @@ func build_win_menu():
 	column.add_child(win_best_label)
 
 	column.add_child(make_button("Play again", font, play_again))
+	column.add_child(make_button("Change level", font, change_level))
 	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
 
 func make_menu_label(font: Font, size: int) -> Label:
@@ -416,6 +446,36 @@ func build_death_menu():
 	column.add_child(death_best_label)
 
 	column.add_child(make_button("Play again", font, play_again))
+	column.add_child(make_button("Change level", font, change_level))
+	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
+
+func build_start_menu():
+	var font = preload("res://fonts/lilita_one_regular.ttf")
+	var column = build_menu("CHOOSE A LEVEL")
+	start_menu = menu_of(column)
+
+	var save = ConfigFile.new()
+	save.load(SAVE_PATH)
+
+	var levels = [
+		[Difficulty.EASY, "Fewer enemies, and they hit softer"],
+		[Difficulty.HARD, "Every enemy, and they hit harder"],
+	]
+
+	for level in levels:
+		var group = VBoxContainer.new() # Keeps the description close to its button
+		group.add_theme_constant_override("separation", 4)
+		column.add_child(group)
+
+		group.add_child(make_button(level[0].capitalize(), font, choose_level.bind(level[0])))
+
+		var about = make_menu_label(font, 22)
+		about.text = level[1]
+		var best = save.get_value(level[0], "score", 0)
+		if best > 0: about.text += "\nBest: %d" % best
+		about.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
+		group.add_child(about)
+
 	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
 
 func play_again():
