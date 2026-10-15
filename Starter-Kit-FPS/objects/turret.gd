@@ -14,6 +14,7 @@ extends StaticBody3D
 @export var shot_damage := 12 # Damage when a ball hits the player
 
 @export_range(0, 1) var health_drop_chance := 0.5 # Chance to drop a health pickup when destroyed
+@export var points := 200 # Score for destroying it
 
 const BODY_COLOR := Color("3a3f4b")
 const TRIM_COLOR := Color("ff9500")
@@ -161,6 +162,8 @@ func destroy():
 	if destroyed: return
 
 	destroyed = true
+
+	get_tree().call_group("hud", "add_score", points, global_position + Vector3.UP * 0.8)
 
 	Audio.play("sounds/enemy_destroy.ogg")
 

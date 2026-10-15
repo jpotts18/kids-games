@@ -10,15 +10,31 @@ const COLOR_HEALTHY := Color("4cd964")
 const COLOR_HURT := Color("ffcc00")
 const COLOR_DANGER := Color("ff3b30")
 
+const COMBO_WINDOW := 3.0 # Seconds to get the next kill and keep the combo going
+const MAX_COMBO := 5 # Highest score multiplier
+const PAR_TIME := 600.0 # Winning faster than this (in seconds) earns a time bonus
+const TIME_BONUS_PER_SECOND := 10 # Bonus points for every second under par
+const SAVE_PATH := "user://fps_best.cfg"
+
 var pause_menu: Control
 var win_menu: Control
+var win_score_label: Label
 var win_time_label: Label
+var win_total_label: Label
+var win_best_label: Label
 
 var enemy_counter: Label
 var timer_label: Label
 var total_enemies := 0
 var elapsed_time := 0.0
 var game_won := false
+
+var score_label: Label
+var combo_label: Label
+var score := 0
+var combo := 0 # Kills in a row, each within COMBO_WINDOW of the last
+var combo_timer := 0.0
+var score_tween: Tween
 
 var health_fill: ProgressBar # Current health
 var health_trail: ProgressBar # Lags behind to show recent damage
@@ -31,6 +47,7 @@ var flash_tween: Tween
 
 func _ready():
 	process_mode = Node.PROCESS_MODE_ALWAYS # Keep running while the game is paused
+	add_to_group("hud") # Enemies call add_score() when they're destroyed
 	build_health_bar()
 	build_goal_display()
 	build_pause_menu()
@@ -43,6 +60,12 @@ func _process(delta):
 
 	elapsed_time += delta
 	timer_label.text = format_time(elapsed_time)
+
+	if combo_timer > 0:
+		combo_timer -= delta
+		if combo_timer <= 0:
+			combo = 0
+			combo_label.visible = false
 
 	var enemies_left = 0
 	for enemy in get_tree().get_nodes_in_group("enemies"):
@@ -57,10 +80,86 @@ func _process(delta):
 func win():
 	game_won = true
 	get_tree().paused = true
-	win_time_label.text = "Time: " + format_time(elapsed_time)
+
+	var time_bonus = int(max(0, PAR_TIME - elapsed_time)) * TIME_BONUS_PER_SECOND
+	var total = score + time_bonus
+
+	# Compare with the best game so far, and save if this one beat it
+
+	var save = ConfigFile.new()
+	save.load(SAVE_PATH) # Fine if it doesn't exist yet
+	var best_score = save.get_value("best", "score", 0)
+	var best_time = save.get_value("best", "time", INF)
+	var new_best_score = total > best_score
+	var new_best_time = elapsed_time < best_time
+
+	if new_best_score: save.set_value("best", "score", total)
+	if new_best_time: save.set_value("best", "time", elapsed_time)
+	if new_best_score or new_best_time: save.save(SAVE_PATH)
+
+	win_score_label.text = "Score: %d" % score
+	win_time_label.text = "Time: %s   (bonus +%d)" % [format_time(elapsed_time), time_bonus]
+	win_total_label.text = "Total: %d" % total
+
+	if new_best_score:
+		win_best_label.text = "NEW BEST SCORE!"
+		win_best_label.add_theme_color_override("font_color", Color("ffcc00"))
+	else:
+		win_best_label.text = "Best: %d   Best time: %s" % [best_score, format_time(min(best_time, elapsed_time))]
+
+	if new_best_time and !new_best_score:
+		win_best_label.text = "NEW BEST TIME!   Best score: %d" % best_score
+
 	win_menu.visible = true
 	$Crosshair.visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+# Called by enemies when the player destroys them. Quick kills in a row
+# multiply the points (x2, x3, ... up to MAX_COMBO)
+
+func add_score(points: int, world_position: Vector3):
+	if game_won: return
+
+	combo = combo + 1 if combo_timer > 0 else 1
+	combo_timer = COMBO_WINDOW
+
+	var multiplier = min(combo, MAX_COMBO)
+	var gained = points * multiplier
+	score += gained
+	score_label.text = "Score: %d" % score
+
+	if multiplier > 1:
+		combo_label.text = "Combo x%d!" % multiplier
+		combo_label.visible = true
+
+	# Score bumps up in size for a moment
+
+	score_label.pivot_offset = score_label.size * Vector2(1, 0.5)
+	if score_tween: score_tween.kill()
+	score_tween = create_tween()
+	score_tween.tween_property(score_label, "scale", Vector2.ONE * 1.25, 0.06)
+	score_tween.tween_property(score_label, "scale", Vector2.ONE, 0.2)
+
+	show_floating_points(gained, multiplier, world_position)
+
+# "+100" that rises and fades where the enemy was destroyed
+
+func show_floating_points(gained: int, multiplier: int, world_position: Vector3):
+	var label = Label3D.new()
+	label.text = "+%d" % gained
+	label.font = preload("res://fonts/lilita_one_regular.ttf")
+	label.font_size = 96 + 16 * (multiplier - 1) # Bigger for bigger combos
+	label.outline_size = 24
+	label.modulate = Color("ffcc00") if multiplier > 1 else Color.WHITE
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	get_tree().current_scene.add_child(label)
+	label.global_position = world_position + Vector3.UP * 0.5
+
+	var tween = label.create_tween().set_parallel()
+	tween.tween_property(label, "global_position:y", label.global_position.y + 1.5, 1.0).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(0.6)
+	tween.chain().tween_callback(label.queue_free)
 
 func format_time(seconds: float) -> String:
 	return "%d:%02d" % [int(seconds) / 60, int(seconds) % 60]
@@ -82,6 +181,15 @@ func build_goal_display():
 	timer_label = make_hud_label(font, 26)
 	timer_label.text = "0:00"
 	column.add_child(timer_label)
+
+	score_label = make_hud_label(font, 34)
+	score_label.text = "Score: 0"
+	column.add_child(score_label)
+
+	combo_label = make_hud_label(font, 28)
+	combo_label.add_theme_color_override("font_color", Color("ffcc00"))
+	combo_label.visible = false
+	column.add_child(combo_label)
 
 func make_hud_label(font: Font, size: int) -> Label:
 	var label = Label.new()
@@ -243,14 +351,24 @@ func build_win_menu():
 	var column = build_menu("YOU WIN!")
 	win_menu = column.get_parent().get_parent()
 
-	win_time_label = Label.new()
-	win_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	win_time_label.add_theme_font_override("font", font)
-	win_time_label.add_theme_font_size_override("font_size", 36)
+	win_score_label = make_menu_label(font, 36)
+	column.add_child(win_score_label)
+	win_time_label = make_menu_label(font, 36)
 	column.add_child(win_time_label)
+	win_total_label = make_menu_label(font, 48)
+	column.add_child(win_total_label)
+	win_best_label = make_menu_label(font, 30)
+	column.add_child(win_best_label)
 
 	column.add_child(make_button("Play again", font, play_again))
 	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
+
+func make_menu_label(font: Font, size: int) -> Label:
+	var label = Label.new()
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", font)
+	label.add_theme_font_size_override("font_size", size)
+	return label
 
 func play_again():
 	get_tree().paused = false

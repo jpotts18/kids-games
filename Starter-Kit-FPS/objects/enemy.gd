@@ -14,6 +14,7 @@ extends Node3D
 @export var player_full_speed := 5.0 # Player speed that counts as "full speed"
 
 @export_range(0, 1) var health_drop_chance := 0.35 # Chance to drop a health pickup when destroyed
+@export var points := 100 # Score for destroying it
 @export var shot_damage := 5 # Damage per hit on the player
 @export var strafe_speed := 0.0 # Circles around the player while shooting (0 = doesn't)
 
@@ -128,6 +129,8 @@ func destroy():
 
 	destroyed = true
 
+	get_tree().call_group("hud", "add_score", points, global_position)
+
 	var explosion = preload("res://objects/explosion.gd").new()
 	get_tree().current_scene.add_child(explosion)
 	explosion.global_position = global_position
@@ -150,6 +153,7 @@ func destroy():
 func carry_weapon(weapon: Weapon):
 	carried_weapon = weapon
 
+	points = 1000 # Worth a lot more than a normal drone
 	health = 600 # 6x a normal drone
 	max_health = health
 	chase_speed = 4.5 # Faster, hard to outrun
