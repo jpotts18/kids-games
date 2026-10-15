@@ -407,6 +407,7 @@ func build_pause_menu():
 	pause_menu = menu_of(column)
 
 	column.add_child(make_button("Resume", font, func(): set_paused(false)))
+	column.add_child(make_button("Change level", font, change_level))
 	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
 
 func build_win_menu():
