@@ -73,6 +73,10 @@ func _ready():
 
 	if ask_difficulty and !Difficulty.chosen():
 		show_start_menu()
+	elif ask_difficulty and !preload("res://scripts/tutorial.gd").seen():
+		var tutorial = preload("res://scripts/tutorial.gd").new() # First game on this computer
+		add_child(tutorial)
+		move_child(tutorial, 1) # Behind the menus (just above the damage flash)
 
 # Enemy counter, timer and winning
 

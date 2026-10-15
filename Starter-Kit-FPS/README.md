@@ -10,6 +10,7 @@ This package includes a basic template for a first person shooter in Godot 4.6. 
   - Flying drones that hover and shoot
   - Bombers: walking bomb robots that charge at you, hop across gaps and explode when close (shoot them from a distance!)
 - Two levels, picked on the start screen: Easy (fewer enemies that hit softer) and Hard (every enemy, and they hit harder). Tune them in `scripts/difficulty.gd`
+- First-time tutorial that walks through the controls step by step (shown once per computer, Tab skips it)
 - Score: points for every enemy (drone 100, bomber 150, turret 200, golden drone 1000), combo multiplier up to x5 for quick kills in a row, a time bonus for winning under 10 minutes, and your best score and time are saved for each level
 - Sprites and 3D Models _(CC0 licensed)_
 
