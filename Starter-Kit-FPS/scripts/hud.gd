@@ -29,6 +29,9 @@ const CONTROLS := [ # Shown next to the pause and win menus
 
 var pause_menu: Control
 var win_menu: Control
+var death_menu: Control
+var death_score_label: Label
+var death_best_label: Label
 var win_score_label: Label
 var win_time_label: Label
 var win_total_label: Label
@@ -38,7 +41,7 @@ var enemy_counter: Label
 var timer_label: Label
 var total_enemies := 0
 var elapsed_time := 0.0
-var game_won := false
+var game_over := false # Won or died; stops the timer, score and pausing
 
 var score_label: Label
 var combo_label: Label
@@ -63,11 +66,12 @@ func _ready():
 	build_goal_display()
 	build_pause_menu()
 	build_win_menu()
+	build_death_menu()
 
 # Enemy counter, timer and winning
 
 func _process(delta):
-	if get_tree().paused or game_won: return
+	if get_tree().paused or game_over: return
 
 	elapsed_time += delta
 	timer_label.text = format_time(elapsed_time)
@@ -89,7 +93,7 @@ func _process(delta):
 		win()
 
 func win():
-	game_won = true
+	game_over = true
 	get_tree().paused = true
 
 	var time_bonus = int(max(0, PAR_TIME - elapsed_time)) * TIME_BONUS_PER_SECOND
@@ -129,7 +133,7 @@ func win():
 # multiply the points (x2, x3, ... up to MAX_COMBO)
 
 func add_score(points: int, world_position: Vector3):
-	if game_won: return
+	if game_over: return
 
 	combo = combo + 1 if combo_timer > 0 else 1
 	combo_timer = COMBO_WINDOW
@@ -171,6 +175,25 @@ func show_floating_points(gained: int, multiplier: int, world_position: Vector3)
 	tween.tween_property(label, "global_position:y", label.global_position.y + 1.5, 1.0).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(0.6)
 	tween.chain().tween_callback(label.queue_free)
+
+# Called by the player when out of health
+
+func die():
+	if game_over: return
+
+	game_over = true
+	get_tree().paused = true
+
+	var save = ConfigFile.new()
+	save.load(SAVE_PATH)
+	var best_score = save.get_value("best", "score", 0)
+
+	death_score_label.text = "Score: %d   Time: %s" % [score, format_time(elapsed_time)]
+	death_best_label.text = "Best score: %d" % best_score if best_score > 0 else "Clear every enemy to set a best score!"
+
+	death_menu.visible = true
+	$Crosshair.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func format_time(seconds: float) -> String:
 	return "%d:%02d" % [int(seconds) / 60, int(seconds) % 60]
@@ -331,7 +354,7 @@ func make_box(color: Color, border_color := Color.TRANSPARENT) -> StyleBoxFlat:
 # Pausing (Escape or P)
 
 func _unhandled_input(event):
-	if game_won: return
+	if game_over: return
 
 	if event.is_action_pressed("mouse_capture_exit") or (event is InputEventKey and event.pressed and !event.echo and event.physical_keycode == KEY_P):
 		set_paused(!get_tree().paused)
@@ -380,6 +403,20 @@ func make_menu_label(font: Font, size: int) -> Label:
 	label.add_theme_font_override("font", font)
 	label.add_theme_font_size_override("font_size", size)
 	return label
+
+func build_death_menu():
+	var font = preload("res://fonts/lilita_one_regular.ttf")
+	var column = build_menu("YOU DIED")
+	death_menu = menu_of(column)
+	column.get_child(0).add_theme_color_override("font_color", COLOR_DANGER) # Red title
+
+	death_score_label = make_menu_label(font, 36)
+	column.add_child(death_score_label)
+	death_best_label = make_menu_label(font, 30)
+	column.add_child(death_best_label)
+
+	column.add_child(make_button("Play again", font, play_again))
+	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
 
 func play_again():
 	get_tree().paused = false

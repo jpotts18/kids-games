@@ -586,8 +586,8 @@ func damage(amount):
 	health -= amount
 	health_updated.emit(health) # Update health on HUD
 	
-	if health < 0:
-		get_tree().reload_current_scene() # Reset when out of health
+	if health <= 0:
+		get_tree().call_group("hud", "die") # Shows the "You died" screen
 
 func heal(amount):
 	health = min(health + amount, max_health)
