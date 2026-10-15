@@ -2,6 +2,7 @@ extends CanvasLayer
 
 @export var win_when_cleared := true # Turned off in the playground, where clearing all enemies shouldn't end the game
 @export var ask_difficulty := true # Shows the easy/hard start screen (off in the playground)
+@export var tutorial := false # On the tutorial map: shows the tutorial instead of enemies, timer and score
 
 const MAX_HEALTH := 100.0
 
@@ -39,6 +40,7 @@ var win_time_label: Label
 var win_total_label: Label
 var win_best_label: Label
 
+var goal_display: Control # Enemy counter, timer and score
 var enemy_counter: Label
 var timer_label: Label
 var total_enemies := 0
@@ -71,12 +73,18 @@ func _ready():
 	build_death_menu()
 	build_start_menu()
 
-	if ask_difficulty and !Difficulty.chosen():
+	if ask_difficulty and !preload("res://scripts/tutorial.gd").seen():
+		get_tree().paused = true # Nothing in this level runs while switching
+		show_tutorial.call_deferred() # First time on this computer
+	elif ask_difficulty and !Difficulty.chosen():
 		show_start_menu()
-	elif ask_difficulty and !preload("res://scripts/tutorial.gd").seen():
-		var tutorial = preload("res://scripts/tutorial.gd").new() # First game on this computer
-		add_child(tutorial)
-		move_child(tutorial, 1) # Behind the menus (just above the damage flash)
+
+	if tutorial:
+		get_tree().paused = false
+		goal_display.visible = false
+		var panel = preload("res://scripts/tutorial.gd").new()
+		add_child(panel)
+		move_child(panel, 1) # Behind the menus (just above the damage flash)
 
 # Enemy counter, timer and winning
 
@@ -234,6 +242,10 @@ func show_start_menu():
 	$Crosshair.visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
+func show_tutorial():
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	get_tree().change_scene_to_file("res://scenes/tutorial.tscn") # Unpauses when it's ready
+
 func choose_level(level: String):
 	Difficulty.level = level
 	play_again() # Reloads the world with the chosen level
@@ -249,6 +261,7 @@ func build_goal_display():
 	var font = preload("res://fonts/lilita_one_regular.ttf")
 
 	var column = VBoxContainer.new()
+	goal_display = column
 	column.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	column.offset_left = -360
 	column.offset_right = -48
@@ -495,6 +508,7 @@ func build_start_menu():
 		about.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
 		group.add_child(about)
 
+	column.add_child(make_button("Tutorial", font, show_tutorial))
 	column.add_child(make_button("Quit", font, func(): get_tree().quit()))
 
 func play_again():

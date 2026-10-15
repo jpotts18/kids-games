@@ -1,8 +1,10 @@
 extends PanelContainer
 
-# First-time tutorial: a box at the bottom of the screen that walks through the
-# controls one step at a time. Each step finishes when the player does it.
-# Only shown once per computer (remembered in the save file); Tab skips it
+# Tutorial: a box at the bottom of the screen that walks through the controls
+# one step at a time, on its own map (scenes/tutorial.tscn) with a frozen drone
+# to practice on. Each step finishes when the player does it. Plays the first
+# time the game opens on a computer (remembered in the save file); Tab skips it.
+# Afterwards the real game starts
 
 const SAVE_PATH := "user://fps_best.cfg" # Same file as the best scores (see hud.gd)
 
@@ -10,10 +12,10 @@ const STEPS := [
 	["move", "Walk around with W A S D\n(or the arrow keys)"],
 	["look", "Move the mouse to look around"],
 	["jump", "Press Space to jump"],
-	["shoot", "Click to shoot"],
+	["shoot", "Click to shoot the frozen drone until it breaks!"],
 	["switch", "Press E to switch weapons"],
-	["grapple", "Press E until you have the grappling hook,\nthen hold click on a platform to fly to it"],
-	["done", "Destroy every enemy to win!\nPress Esc any time to pause"],
+	["grapple", "Press E until you have the grappling hook,\nthen hold click on the high ledge to fly up"],
+	["done", "You're ready! In the real game,\ndestroy every enemy to win"],
 ]
 
 const DONE_SHOW_TIME := 5.0 # The last step disappears by itself after this long
@@ -56,6 +58,10 @@ func _process(delta):
 		return
 
 	if step_completed(STEPS[step][0]):
+		if STEPS[step][0] == "shoot":
+			var sign = get_tree().current_scene.get_node_or_null("Signs/DroneSign")
+			if sign: sign.queue_free()
+
 		Audio.play("sounds/weapon_change.ogg")
 		text_label.text = "Nice!"
 		text_label.add_theme_color_override("font_color", Color("4cd964"))
@@ -74,7 +80,7 @@ func step_completed(id: String) -> bool:
 		"move": return moved > 3.0
 		"look": return looked > 1.5 # Radians turned (left and right both count)
 		"jump": return Input.is_action_just_pressed("jump")
-		"shoot": return Input.is_action_just_pressed("shoot")
+		"shoot": return get_tree().get_nodes_in_group("enemies").all(func(enemy): return enemy.destroyed)
 		"switch": return Input.is_action_just_pressed("weapon_toggle")
 		"grapple": return player.grappling
 	return false
@@ -103,7 +109,8 @@ func show_step():
 	var steps_to_do = STEPS.size() - 1 # The last one is just a message
 	count_label.text = "TUTORIAL  %d / %d" % [step + 1, steps_to_do] if step < steps_to_do else "TUTORIAL DONE!"
 
-# Remember it's been seen, so it doesn't show again on this computer
+# Remember it's been seen, so it doesn't show again on this computer, then
+# start the real game
 
 func finish():
 	var save = ConfigFile.new()
@@ -111,10 +118,8 @@ func finish():
 	save.set_value("tutorial", "seen", true)
 	save.save(SAVE_PATH)
 
-	var tween = create_tween()
-	tween.tween_property(self, "modulate:a", 0.0, 0.4)
-	tween.tween_callback(queue_free)
 	set_process(false)
+	get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
 
 func build():
 	var font = preload("res://fonts/lilita_one_regular.ttf")

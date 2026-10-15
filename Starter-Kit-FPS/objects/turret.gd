@@ -83,6 +83,8 @@ func _physics_process(delta):
 # Sits on whatever is below it (so it can be placed roughly in the editor)
 
 func snap_to_ground():
+	if !is_inside_tree(): return # The level was swapped out before this ran
+
 	var from = global_position + Vector3.UP * 0.5
 	var query = PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 5)
 	query.exclude = [get_rid()]
